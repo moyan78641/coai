@@ -4,7 +4,6 @@
 
 # Stage 1: Backend build with cross-compilation
 FROM --platform=$BUILDPLATFORM golang:1.21-alpine3.18 AS backend
-
 WORKDIR /backend
 COPY . .
 
@@ -21,22 +20,24 @@ ENV GOOS=linux \
 # 配置多镜像源
 RUN echo -e "https://mirrors.aliyun.com/alpine/v3.18/main\n\
 https://mirrors.aliyun.com/alpine/v3.18/community\n\
-https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main" > /etc/apk/repositories
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main\n\
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community" > /etc/apk/repositories
 
 # 安装核心依赖
-RUN apk update --no-cache && \
+RUN apk update --no-cache --progress && \
     apk add --no-cache --virtual .build-deps \
     build-base \
     git \
     zlib-dev zlib-static \
-    openssl-dev openssl-static \  
+    openssl-dev openssl-static \
     pkgconf \
     linux-headers \
     automake \
     autoconf \
     libtool \
     file \
-    upx
+    upx \
+    && (echo "依赖安装完成" && ls /usr/lib/libssl.a)  
     
 # 安装ARM64交叉工具链（修复路径与校验）
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
