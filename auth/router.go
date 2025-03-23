@@ -18,4 +18,9 @@ func Register(app *gin.RouterGroup) {
 	app.POST("/subscribe", SubscribeAPI)
 	app.GET("/invite", InviteAPI)
 	app.GET("/redeem", RedeemAPI)
+	
+	// 虎皮椒支付相关API
+	app.POST("/xunhupay", XunhuPayAPI)
+	app.POST("/xunhupay/notify", XunhuPayNotifyAPI)
+	app.GET("/xunhupay/query", XunhuPayQueryAPI)
 }
