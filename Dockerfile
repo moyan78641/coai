@@ -9,52 +9,39 @@ WORKDIR /backend
 COPY . .
 
 ARG TARGETARCH
-ARG TARGETOS
-ENV GOOS=${TARGETOS} \
+ENV GOOS=linux \
     GOARCH=${TARGETARCH} \
     CGO_ENABLED=1 \
-    GO111MODULE=on \
-    GOPROXY=https://goproxy.cn,direct \
-    # 关键修复：设置完整工具链路径
-    PATH="/usr/local/aarch64-linux-musl-cross/bin:${PATH}"
+    # 修复路径指向新工具链位置
+    CC=/usr/local/cross-toolchain/bin/aarch64-linux-musl-gcc \
+    CXX=/usr/local/cross-toolchain/bin/aarch64-linux-musl-g++ \
+    PKG_CONFIG_PATH=/usr/local/cross-toolchain/aarch64-linux-musl/lib/pkgconfig \
+    CGO_CFLAGS="-I/usr/local/cross-toolchain/aarch64-linux-musl/include" \
+    CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib"
 
-# 安装完整依赖（新增关键包）
-RUN apk add --no-cache build-base git zlib-dev zlib-static linux-headers libc6-compat
+# 安装基础依赖（新增关键包）
+RUN apk add --no-cache \
+    build-base \
+    git \
+    zlib-dev \
+    zlib-static \  
+    linux-headers
 
-# 更新后的工具链安装步骤
+# 安装工具链（保持与之前修复一致）
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     mkdir -p /usr/local/cross-toolchain && \
-    # 使用HTTPS镜像源（带重试机制）
-    wget -q --tries=3 --timeout=30 --retry-connrefused \
-        -O /tmp/cross.tgz \
-        https://musl.cc/aarch64-linux-musl-cross.tgz && \
-    # 应用您验证的SHA256 (c9098178...)
-    (echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/cross.tgz" | sha256sum -c -) && \
-    # 解压到专用目录（保持路径一致性）
+    wget -q -O /tmp/cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz && \
+    echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/cross.tgz" | sha256sum -c - && \
     tar -xzf /tmp/cross.tgz -C /usr/local/cross-toolchain --strip-components=1 && \
-    # 创建标准符号链接
     ln -sv /usr/local/cross-toolchain/bin/* /usr/local/bin/ && \
-    # 验证关键文件存在性
-    test -x /usr/local/bin/aarch64-linux-musl-gcc && \
-    # 清理临时文件
-    rm -vf /tmp/cross.tgz; \
-    # 显示工具链版本
-    aarch64-linux-musl-gcc --version | head -n1; \
+    rm /tmp/cross.tgz; \
 fi
-
-# 预下载Go模块（加速构建）
-RUN go mod download
 
 # 修复编译命令
 RUN --mount=type=cache,target=/go/pkg/mod \
     if [ "${TARGETARCH}" = "arm64" ]; then \
-        CC=aarch64-linux-musl-gcc \
-        CXX=aarch64-linux-musl-g++ \
-        GOARM=7 \
-        CGO_CFLAGS="-I/usr/local/aarch64-linux-musl-cross/aarch64-linux-musl/include" \
-        CGO_LDFLAGS="-L/usr/local/aarch64-linux-musl-cross/aarch64-linux-musl/lib" \
         go build -v -x \
-            -buildmode=pie \
+            -buildmode=default \  # 修复：移除pie模式
             -ldflags="-linkmode=external -extldflags '-static -lz -lpthread'" \
             -tags="musl,netgo" \
             -o chat .; \
@@ -65,6 +52,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
             -tags="netgo" \
             -o chat .; \
     fi
+
 # Stage 2: Frontend build
 FROM node:18-alpine AS frontend
 
