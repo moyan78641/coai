@@ -18,16 +18,24 @@ ENV GOOS=linux \
     CGO_CFLAGS="-I/usr/local/cross-toolchain/aarch64-linux-musl/include" \
     CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib -static"
 
-# 安装核心依赖（新增关键包）
-RUN apk add --no-cache \
+# 关键修复点
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+RUN apk update --no-cache && \
+    apk upgrade --no-cache && \
+    apk add --no-cache --virtual .build-deps \
     build-base \
     git \
     zlib-dev zlib-static \
-    libressl-dev libressl-static \
+    openssl-dev openssl-libs-static \
     pkgconf \
     linux-headers \
-    automake autoconf libtool file
-
+    automake \
+    autoconf \
+    libtool \
+    file \
+    upx
+    
 # 安装ARM64交叉工具链（修复路径与校验）
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     mkdir -p /usr/local/cross-toolchain && \
