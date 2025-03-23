@@ -17,27 +17,41 @@ ENV GOOS=linux \
     CGO_CFLAGS="-I/usr/local/cross-toolchain/aarch64-linux-musl/include" \
     CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib -static"
 
+# 修复1：强制更新证书
+RUN apk add --no-cache --allow-untrusted ca-certificates && \
+    update-ca-certificates
+
 # 配置多镜像源
-RUN echo -e "https://mirrors.aliyun.com/alpine/v3.18/main\n\
-https://mirrors.aliyun.com/alpine/v3.18/community\n\
-https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main\n\
-https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community" > /etc/apk/repositories
+RUN echo -e "https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main\n\
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community\n\
+https://mirrors.aliyun.com/alpine/v3.18/main\n\
+https://mirrors.aliyun.com/alpine/v3.18/community" | tee /etc/apk/repositories
 
 # 安装核心依赖
-RUN apk update --no-cache --progress && \
-    apk add --no-cache --virtual .build-deps \
-    build-base \
-    git \
-    zlib-dev zlib-static \
-    openssl-dev openssl-static \
-    pkgconf \
-    linux-headers \
-    automake \
-    autoconf \
-    libtool \
-    file \
-    upx \
-    && (echo "依赖安装完成" && ls /usr/lib/libssl.a)  
+RUN set -ex; \
+    apk update --no-cache --progress; \
+    apk add --no-cache --virtual .build-deps-stage1 \
+        build-base \
+        git \
+        linux-headers \
+        automake \
+        autoconf; \
+    apk add --no-cache --virtual .build-deps-stage2 \
+        openssl-dev \
+        openssl-static \
+        --repository=https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community; \
+    apk add --no-cache --virtual .build-deps-stage3 \
+        upx \
+        --repository=https://mirrors.aliyun.com/alpine/v3.18/community; \
+    apk add --no-cache --virtual .build-deps-stage4 \
+        zlib-dev \
+        zlib-static \
+        pkgconf \
+        libtool \
+        file; \
+    # 验证关键文件
+    ls -l /usr/lib/libssl.a /usr/lib/libcrypto.a && \
+    upx --version
     
 # 安装ARM64交叉工具链（修复路径与校验）
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
