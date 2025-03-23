@@ -8,7 +8,10 @@ WORKDIR /backend
 COPY . .
 
 # Ensure xunhupay module is properly included
-RUN mkdir -p /go/src/xunhupay && cp -r xunhupay-master/* /go/src/xunhupay/
+RUN mkdir -p /go/src/xunhupay && cp -r xunhupay-master/* /go/src/xunhupay/ && \
+    go env -w GO111MODULE=on && \
+    go mod download && \
+    go mod edit -replace xunhupay=/go/src/xunhupay
 
 # Set go proxy to https://goproxy.cn (open for vps in China Mainland)
 # RUN go env -w GOPROXY=https://goproxy.cn,direct
@@ -37,10 +40,11 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     CGO_ENABLED=1 \
     GOOS=linux \
     GOARCH=arm64 \
-    go build -o chat -a -ldflags="-extldflags=-static" .; \
+    go mod tidy && \
+    go build -o chat -a -ldflags="-extldflags=-static" -tags netgo .; \
     else \
-    go install && \
-    go build .; \
+    go mod tidy && \
+    go build -tags netgo .; \
     fi
 
 FROM node:18 AS frontend
