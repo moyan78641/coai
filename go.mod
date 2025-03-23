@@ -2,6 +2,8 @@ module chat
 
 go 1.20
 
+replace xunhupay => ./xunhupay-master
+
 require (
 	github.com/bincooo/claude-api v1.0.2
 	github.com/chai2010/webp v1.1.1
