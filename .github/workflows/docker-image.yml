@@ -47,7 +47,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            moyan7864/chatnio:latest                # 修改点1
-            moyan7864/chatnio:${{ steps.timestamp.outputs.BUILD_TIMESTAMP }}  # 修改点2
-          cache-from: type=registry,ref=moyan7864/chatnio:buildcache  # 修改点3
-          cache-to: type=registry,ref=moyan7864/chatnio:buildcache,mode=max  # 修改点4
+            moyan7864/chatnio:latest                
+            moyan7864/chatnio:${{ steps.timestamp.outputs.BUILD_TIMESTAMP }} 
+          cache-from: type=registry,ref=moyan7864/chatnio:buildcache  
+          cache-to: type=registry,ref=moyan7864/chatnio:buildcache,mode=max  
