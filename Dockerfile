@@ -7,6 +7,9 @@ FROM --platform=$BUILDPLATFORM golang:1.21-alpine3.18 AS backend
 WORKDIR /backend
 COPY . .
 
+# Ensure xunhupay module is properly included
+RUN mkdir -p /go/src/xunhupay && cp -r xunhupay-master/* /go/src/xunhupay/
+
 ARG TARGETARCH
 ENV GOOS=linux \
     GOARCH=${TARGETARCH} \
