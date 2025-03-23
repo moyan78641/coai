@@ -38,6 +38,7 @@ RUN apk add --no-cache \
 
 # Build backend
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
+    cd /go/src/xunhupay && go mod tidy && cd /backend && \
     CC=/usr/local/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc \
     CGO_ENABLED=1 \
     GOOS=linux \
@@ -45,6 +46,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     go mod tidy && \
     go build -o chat -a -ldflags="-extldflags=-static" -tags netgo .; \
     else \
+    cd /go/src/xunhupay && go mod tidy && cd /backend && \
     go mod tidy && \
     go build -tags netgo .; \
     fi
