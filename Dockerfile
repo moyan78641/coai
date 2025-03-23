@@ -11,7 +11,8 @@ COPY . .
 RUN mkdir -p /go/src/xunhupay && cp -r xunhupay-master/* /go/src/xunhupay/ && \
     go env -w GO111MODULE=on && \
     go mod download && \
-    go mod edit -replace xunhupay=/go/src/xunhupay
+    go mod edit -replace xunhupay=/go/src/xunhupay && \
+    go mod tidy
 
 # Set go proxy to https://goproxy.cn (open for vps in China Mainland)
 # RUN go env -w GOPROXY=https://goproxy.cn,direct
