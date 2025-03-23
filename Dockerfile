@@ -3,7 +3,7 @@
 # Description: Dockerfile for chatnio
 
 # Stage 1: Backend build with cross-compilation
-FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine3.18 AS backend
 
 WORKDIR /backend
 COPY . .
@@ -18,16 +18,18 @@ ENV GOOS=linux \
     CGO_CFLAGS="-I/usr/local/cross-toolchain/aarch64-linux-musl/include" \
     CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib -static"
 
-# 关键修复点
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+# 配置多镜像源
+RUN echo -e "https://mirrors.aliyun.com/alpine/v3.18/main\n\
+https://mirrors.aliyun.com/alpine/v3.18/community\n\
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main" > /etc/apk/repositories
 
+# 安装核心依赖
 RUN apk update --no-cache && \
-    apk upgrade --no-cache && \
     apk add --no-cache --virtual .build-deps \
     build-base \
     git \
     zlib-dev zlib-static \
-    openssl-dev openssl-libs-static \
+    openssl-dev openssl-static \  
     pkgconf \
     linux-headers \
     automake \
