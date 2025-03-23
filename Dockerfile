@@ -16,38 +16,42 @@ ENV GOOS=linux \
     CXX=/usr/local/cross-toolchain/bin/aarch64-linux-musl-g++ \
     PKG_CONFIG_PATH=/usr/local/cross-toolchain/aarch64-linux-musl/lib/pkgconfig \
     CGO_CFLAGS="-I/usr/local/cross-toolchain/aarch64-linux-musl/include" \
-    CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib"
+    CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib -static"
 
+# 安装核心依赖（新增关键包）
 RUN apk add --no-cache \
     build-base \
     git \
-    zlib-dev \
-    zlib-static \
-    pkgconfig \
-    libressl-dev \
-    linux-headers
+    zlib-dev zlib-static \
+    libressl-dev libressl-static \
+    pkgconf \
+    linux-headers \
+    automake autoconf libtool file
 
+# 安装ARM64交叉工具链（修复路径与校验）
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     mkdir -p /usr/local/cross-toolchain && \
     wget -q -O /tmp/cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz && \
-    echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/cross.tgz" | sha256sum -c - && \
+    (echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/cross.tgz" | sha256sum -c - || \
+     { echo "工具链校验失败！当前哈希值：$(sha256sum /tmp/cross.tgz)"; exit 1; }) && \
     tar -xzf /tmp/cross.tgz -C /usr/local/cross-toolchain --strip-components=1 && \
-    ln -sfv /usr/local/cross-toolchain/bin/* /usr/local/bin/ && \
+    ln -sv /usr/local/cross-toolchain/bin/aarch64-linux-musl-* /usr/local/bin/ && \
     rm /tmp/cross.tgz; \
 fi
 
+# 编译命令（修复参数顺序）
 RUN --mount=type=cache,target=/go/pkg/mod \
     if [ "${TARGETARCH}" = "arm64" ]; then \
         go build -v -x \
-            -buildmode=default \
-            -ldflags='-linkmode=external -extldflags "-static -lpthread -lz"' \
-            -tags=musl,netgo \
+            -buildmode=pie \
+            -tags="musl,netgo,static" \
+            -ldflags='-linkmode=external -extldflags "-static-pie -lz -lpthread"' \
             -o chat .; \
     else \
         CGO_ENABLED=0 \
         go build -v \
-            -ldflags="-s -w" \
             -tags=netgo \
+            -ldflags="-s -w" \
             -o chat .; \
     fi
 # Stage 2: Frontend build
