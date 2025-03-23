@@ -2,7 +2,7 @@ package auth
 
 import (
 	"chat/utils"
-	"chat/xunhupay-master"
+	"xunhupay"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
