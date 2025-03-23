@@ -21,13 +21,25 @@ ENV GOOS=${TARGETOS} \
 # 安装完整依赖（新增关键包）
 RUN apk add --no-cache build-base git zlib-dev zlib-static linux-headers libc6-compat
 
-# 安装ARM64工具链（带校验）
+# 更新后的工具链安装步骤
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
-    wget -q -O /tmp/cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz && \
-    sha256sum /tmp/cross.tgz | grep -q '^a6cae6c23c4008107e5d8d03d802e8d2e4f0fadc5a3c0f6d1e6b2e3c7f5d0d8a' && \
-    tar -xzf /tmp/cross.tgz -C /usr/local && \
-    ln -sv /usr/local/aarch64-linux-musl-cross/bin/* /usr/bin/ && \
-    rm /tmp/cross.tgz; \
+    mkdir -p /usr/local/cross-toolchain && \
+    # 使用HTTPS镜像源（带重试机制）
+    wget -q --tries=3 --timeout=30 --retry-connrefused \
+        -O /tmp/cross.tgz \
+        https://musl.cc/aarch64-linux-musl-cross.tgz && \
+    # 应用您验证的SHA256 (c9098178...)
+    (echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/cross.tgz" | sha256sum -c -) && \
+    # 解压到专用目录（保持路径一致性）
+    tar -xzf /tmp/cross.tgz -C /usr/local/cross-toolchain --strip-components=1 && \
+    # 创建标准符号链接
+    ln -sv /usr/local/cross-toolchain/bin/* /usr/local/bin/ && \
+    # 验证关键文件存在性
+    test -x /usr/local/bin/aarch64-linux-musl-gcc && \
+    # 清理临时文件
+    rm -vf /tmp/cross.tgz; \
+    # 显示工具链版本
+    aarch64-linux-musl-gcc --version | head -n1; \
 fi
 
 # 预下载Go模块（加速构建）
