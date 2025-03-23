@@ -14,28 +14,36 @@ ENV GOOS=${TARGETOS} \
     GOARCH=${TARGETARCH} \
     CGO_ENABLED=1 \
     GO111MODULE=on \
-    GOPROXY=https://goproxy.cn,direct
+    GOPROXY=https://goproxy.cn,direct \
+    # 关键修复：设置完整工具链路径
+    PATH="/usr/local/aarch64-linux-musl-cross/bin:${PATH}"
 
-# 安装基础编译工具和依赖
-RUN apk add --no-cache build-base git zlib-dev zlib-static linux-headers
+# 安装完整依赖（新增关键包）
+RUN apk add --no-cache build-base git zlib-dev zlib-static linux-headers libc6-compat
 
-# ARM64交叉编译工具链安装（关键修复）
+# 安装ARM64工具链（带校验）
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     wget -q -O /tmp/cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz && \
+    sha256sum /tmp/cross.tgz | grep -q '^a6cae6c23c4008107e5d8d03d802e8d2e4f0fadc5a3c0f6d1e6b2e3c7f5d0d8a' && \
     tar -xzf /tmp/cross.tgz -C /usr/local && \
-    ln -s /usr/local/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc /usr/bin/musl-gcc && \
+    ln -sv /usr/local/aarch64-linux-musl-cross/bin/* /usr/bin/ && \
     rm /tmp/cross.tgz; \
 fi
 
-# 构建命令（关键参数调整）
+# 预下载Go模块（加速构建）
+RUN go mod download
+
+# 修复编译命令
 RUN --mount=type=cache,target=/go/pkg/mod \
     if [ "${TARGETARCH}" = "arm64" ]; then \
-        CC="aarch64-linux-musl-gcc" \
-        CXX="aarch64-linux-musl-g++" \
+        CC=aarch64-linux-musl-gcc \
+        CXX=aarch64-linux-musl-g++ \
         GOARM=7 \
-        GOARCH=arm64 \
+        CGO_CFLAGS="-I/usr/local/aarch64-linux-musl-cross/aarch64-linux-musl/include" \
+        CGO_LDFLAGS="-L/usr/local/aarch64-linux-musl-cross/aarch64-linux-musl/lib" \
         go build -v -x \
-            -ldflags="-linkmode external -extldflags '-static -L/usr/local/aarch64-linux-musl-cross/aarch64-linux-musl/lib'" \
+            -buildmode=pie \
+            -ldflags="-linkmode=external -extldflags '-static -lz -lpthread'" \
             -tags="musl,netgo" \
             -o chat .; \
     else \
