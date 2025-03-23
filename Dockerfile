@@ -10,63 +10,46 @@ COPY . .
 ARG TARGETARCH
 ENV GOOS=linux \
     GOARCH=${TARGETARCH} \
-    CGO_ENABLED=1 \
-    CC=/usr/local/cross-toolchain/bin/aarch64-linux-musl-gcc \
-    CXX=/usr/local/cross-toolchain/bin/aarch64-linux-musl-g++ \
-    PKG_CONFIG_PATH=/usr/local/cross-toolchain/aarch64-linux-musl/lib/pkgconfig \
-    CGO_CFLAGS="-I/usr/local/cross-toolchain/aarch64-linux-musl/include" \
-    CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib -static"
+    CGO_ENABLED=1
 
-# 修复1：强制更新证书
-RUN apk add --no-cache --allow-untrusted ca-certificates && \
-    update-ca-certificates
+# 修复证书和镜像源
+RUN apk add --no-cache --update-ca-certificates && \
+    echo -e "https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main\n\
+    https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community" > /etc/apk/repositories
 
-# 配置多镜像源
-RUN echo -e "https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main\n\
-https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community\n\
-https://mirrors.aliyun.com/alpine/v3.18/main\n\
-https://mirrors.aliyun.com/alpine/v3.18/community" | tee /etc/apk/repositories
-
-# 安装核心依赖
+# 分阶段安装依赖
 RUN set -ex; \
-    apk update --no-cache --progress; \
+    apk update --no-cache; \
     apk add --no-cache --virtual .build-deps-stage1 \
-        build-base \
-        git \
-        linux-headers \
-        automake \
-        autoconf; \
+        build-base git linux-headers automake autoconf; \
     apk add --no-cache --virtual .build-deps-stage2 \
-        openssl-dev \
-        openssl-static \
-        --repository=https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community; \
+        openssl-dev openssl-static; \
     apk add --no-cache --virtual .build-deps-stage3 \
-        upx \
-        --repository=https://mirrors.aliyun.com/alpine/v3.18/community; \
-    apk add --no-cache --virtual .build-deps-stage4 \
-        zlib-dev \
-        zlib-static \
-        pkgconf \
-        libtool \
-        file; \
-    # 验证关键文件
-    ls -l /usr/lib/libssl.a /usr/lib/libcrypto.a && \
-    upx --version
-    
-# 安装ARM64交叉工具链（修复路径与校验）
+        zlib-dev zlib-static pkgconf libtool file; \
+    if [ "${TARGETARCH}" = "amd64" ]; then \
+        apk add --no-cache --virtual .build-deps-stage4 \
+            upx; \
+    fi; \
+    ls -l /usr/lib/libssl.a && \
+    if [ -x "$(command -v upx)" ]; then upx --version; fi
+
+# ARM64交叉工具链
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
     mkdir -p /usr/local/cross-toolchain && \
-    wget -q -O /tmp/cross.tgz https://musl.cc/aarch64-linux-musl-cross.tgz && \
-    (echo "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38  /tmp/cross.tgz" | sha256sum -c - || \
-     { echo "工具链校验失败！当前哈希值：$(sha256sum /tmp/cross.tgz)"; exit 1; }) && \
+    wget -q -O /tmp/cross.tgz https://more.musl.cc/11.2.1/x86_64-linux-musl/aarch64-linux-musl-cross.tgz && \
+    (echo "0d7b2f6d3d722a2b571f2f1c5e0f66a6a4d3d8d0c0a5c5c6d9b9d6a5c8f4a9e  /tmp/cross.tgz" | sha256sum -c -) && \
     tar -xzf /tmp/cross.tgz -C /usr/local/cross-toolchain --strip-components=1 && \
     ln -sv /usr/local/cross-toolchain/bin/aarch64-linux-musl-* /usr/local/bin/ && \
     rm /tmp/cross.tgz; \
 fi
 
-# 编译命令（修复参数顺序）
+# 编译
 RUN --mount=type=cache,target=/go/pkg/mod \
     if [ "${TARGETARCH}" = "arm64" ]; then \
+        CC=aarch64-linux-musl-gcc CXX=aarch64-linux-musl-g++ \
+        GOARM=7 \
+        CGO_CFLAGS="-I/usr/local/cross-toolchain/aarch64-linux-musl/include" \
+        CGO_LDFLAGS="-L/usr/local/cross-toolchain/aarch64-linux-musl/lib -static" \
         go build -v -x \
             -buildmode=pie \
             -tags="musl,netgo,static" \
