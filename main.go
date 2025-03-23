@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"net/url"
+	_ "xunhupay" // 导入虎皮椒支付模块
 )
 
 func readCorsOrigins() {
